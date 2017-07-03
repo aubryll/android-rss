@@ -74,17 +74,34 @@ public class RSSReader implements java.io.Closeable {
      *           HTTP error
      * @throws RSSFault if an unrecoverable IO error has occurred
      */
-    public RSSFeed load(String uri) throws RSSReaderException {
+  public RSSFeed load(String uri) throws RSSReaderException {
         InputStream feedStream = null;
+
+        /*Added re-direction, at first it would fail throw 
+         HttpResponseException: 301 Moved Permanently exception
+         */
+      
+      //New Url is store
+        String redirectUrl;
         try {
             URL url = new URL(uri);
             // Send GET request to URI
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            //In case of a re-direction the new URL is obtained
+            redirectUrl = conn.getHeaderField("Location");
             conn.setRequestMethod("GET");
             conn.connect();
 
-            // Check if server response is valid
+            // Check if server response is a redirection, if true re-direct to the new url
+            if((conn.getResponseCode() == HttpURLConnection.HTTP_MOVED_PERM || conn.getResponseCode() == HttpURLConnection.HTTP_MOVED_TEMP) && redirect != null){
+                url = new URL(redirectUrl);
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.connect();
+            }
+
             if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                Log.d(RSSReader.class.getSimpleName(), "Returned Code "+conn.getResponseCode());
                 throw new RSSReaderException(conn.getResponseCode(),
                         conn.getResponseMessage());
             }
@@ -99,6 +116,7 @@ public class RSSReader implements java.io.Closeable {
 
             return feed;
         } catch (IOException e) {
+            e.printStackTrace();
             throw new RSSFault(e);
         } finally {
             Resources.closeQuietly(feedStream);
